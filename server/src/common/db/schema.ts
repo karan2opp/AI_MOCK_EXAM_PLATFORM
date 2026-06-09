@@ -1,1 +1,7 @@
 export * from "../../module/auth/user.schema.js";
+export * from "../../module/exam/exam.schema.js";
+export * from "../../module/sections/section.schema.js";
+export * from "../../module/questions/question.schema.js";
+export * from "../../module/options/option.schema.js";
+export * from "../../module/submissions/submission.schema.js";
+export * from "../../module/answers/answer.schema.js";

@@ -60,3 +60,15 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     next(error);
   }
 };
+
+export const authorize = (...roles: string[]) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) throw ApiError.unauthorized("Not authenticated");
+
+    if (!roles.includes(req.user.role)) {
+      throw ApiError.forbidden("You are not authorized to perform this action");
+    }
+
+    next();
+  };
+};

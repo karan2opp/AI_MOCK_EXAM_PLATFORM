@@ -1,0 +1,15 @@
+import { Router } from "express";
+import * as controller from "./exam.controller.js";
+import validate from "../../common/middleware/validate.middleware.js";
+import { authenticate, authorize } from "../../common/middleware/auth.middleware.js";
+import { createExamSchema, updateExamSchema } from "./dto/exam.dto.js";
+
+const router = Router();
+
+router.post("/", authenticate, authorize("teacher"), validate(createExamSchema), controller.createExam);
+router.get("/", authenticate, authorize("teacher"), controller.getExams);
+router.get("/:id", authenticate, authorize("teacher"), controller.getExamById);
+router.patch("/:id", authenticate, authorize("teacher"), validate(updateExamSchema), controller.updateExam);
+router.delete("/:id", authenticate, authorize("teacher"), controller.deleteExam);
+
+export default router;

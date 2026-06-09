@@ -1,0 +1,189 @@
+import { eq, and, inArray } from "drizzle-orm";
+import db from "../../common/db/index.js";
+import { questions, options, sections, exams } from "../../common/db/schema.js";
+import { ApiError } from "../../common/utils/ApiError.js";
+import type { CreateQuestionDto, UpdateQuestionDto } from "./dto/question.dto.js";
+import { uploadToCloudinary } from "../../common/config/cloudinary.js";
+// ── Helper: verify section belongs to teacher ──────────────────────────────────
+const verifySectionOwnership = async (sectionId: string, teacherId: string) => {
+    const [section] = await db.select({
+        id: sections.id,
+        examCreatedBy: exams.createdBy,
+    })
+        .from(sections)
+        .innerJoin(exams, eq(sections.examId, exams.id))
+        .where(eq(sections.id, sectionId));
+
+    if (!section) throw ApiError.notFound("Section not found");
+    if (section.examCreatedBy !== teacherId) throw ApiError.forbidden("You are not authorized");
+    return section;
+};
+
+// ── Helper: verify question belongs to teacher ─────────────────────────────────
+const verifyQuestionOwnership = async (questionId: string, teacherId: string) => {
+    const [question] = await db.select({
+        id: questions.id,
+        sectionId: questions.sectionId,
+        type: questions.type,
+        description: questions.description,
+        marks: questions.marks,
+        createdAt: questions.createdAt,
+        updatedAt: questions.updatedAt,
+        examCreatedBy: exams.createdBy,
+    })
+        .from(questions)
+        .innerJoin(sections, eq(questions.sectionId, sections.id))
+        .innerJoin(exams, eq(sections.examId, exams.id))
+        .where(eq(questions.id, questionId));
+
+    if (!question) throw ApiError.notFound("Question not found");
+    if (question.examCreatedBy !== teacherId) throw ApiError.forbidden("You are not authorized");
+    return question;
+};
+
+// ── Create Question ────────────────────────────────────────────────────────────
+const createQuestion = async (
+    data: CreateQuestionDto,
+    teacherId: string,
+    imageFiles?: Express.Multer.File[]  // ← receives files from controller
+) => {
+    await verifySectionOwnership(data.sectionId, teacherId);
+
+    // upload images to cloudinary before transaction
+    const uploadedImages: { url: string; publicId: string }[] = [];
+
+    if (imageFiles && imageFiles.length > 0) {
+        const uploadPromises = imageFiles.map((file) =>
+            uploadToCloudinary(file.buffer, "questions")
+        );
+        const results = await Promise.all(uploadPromises);
+        uploadedImages.push(...results.map((r) => ({ url: r.url, publicId: r.publicId })));
+    }
+
+    const result = await db.transaction(async (tx) => {
+        const [question] = await tx.insert(questions).values({
+            sectionId: data.sectionId,
+            type: data.type,
+            description: data.description,
+            marks: data.marks,
+            images: uploadedImages.length > 0 ? uploadedImages : null,
+        }).returning();
+
+        if (!question) throw ApiError.internal("Failed to create question");
+
+        let optionsData: typeof options.$inferSelect[] = [];
+
+        if (data.type === "mcq" && data.options && data.options.length > 0) {
+            optionsData = await tx.insert(options).values(
+                data.options.map(opt => ({
+                    questionId: question.id,
+                    value: opt.value,
+                    isCorrect: opt.isCorrect,
+                }))
+            ).returning();
+        }
+
+        return { ...question, options: optionsData };
+    });
+
+    return result;
+};
+
+// ── Get All Questions by Section ───────────────────────────────────────────────
+const getQuestionsBySection = async (sectionId: string, teacherId: string) => {
+    await verifySectionOwnership(sectionId, teacherId);
+
+    const questionsData = await db.select().from(questions).where(eq(questions.sectionId, sectionId));
+
+    const questionsWithOptions = await Promise.all(
+        questionsData.map(async (question) => {
+            const optionsData = await db.select().from(options).where(eq(options.questionId, question.id));
+            return { ...question, options: optionsData };
+        })
+    );
+
+    return questionsWithOptions;
+};
+
+// ── Get Single Question with Options ──────────────────────────────────────────
+const getQuestionById = async (questionId: string, teacherId: string) => {
+    const question = await verifyQuestionOwnership(questionId, teacherId);
+    const optionsData = await db.select().from(options).where(eq(options.questionId, questionId));
+    return { ...question, options: optionsData };
+};
+
+// ── Update Question (with smart options merge) ─────────────────────────────────
+const updateQuestion = async (questionId: string, data: UpdateQuestionDto, teacherId: string) => {
+    await verifyQuestionOwnership(questionId, teacherId);
+
+    const result = await db.transaction(async (tx) => {
+        // update question fields
+        const [updated] = await tx.update(questions)
+            .set({
+                ...(data.description && { description: data.description }),
+                ...(data.marks && { marks: data.marks }),
+                updatedAt: new Date(),
+            })
+            .where(eq(questions.id, questionId))
+            .returning();
+
+        if (!updated) throw ApiError.internal("Failed to update question");
+
+        if (data.options && data.options.length > 0) {
+            // separate options into update and create
+            const toUpdate = data.options.filter(opt => opt.id)
+            const toCreate = data.options.filter(opt => !opt.id)
+
+            // ids included in request — keep these
+            const incomingIds = toUpdate.map(opt => opt.id as string)
+
+            // delete options not included in request
+            const existingOptions = await tx.select().from(options).where(eq(options.questionId, questionId))
+            const toDelete = existingOptions.filter(opt => !incomingIds.includes(opt.id))
+
+            if (toDelete.length > 0) {
+                await tx.delete(options).where(
+                    inArray(options.id, toDelete.map(opt => opt.id))
+                )
+            }
+
+            // update existing options
+            await Promise.all(
+                toUpdate.map(opt =>
+                    tx.update(options)
+                        .set({
+                            value: opt.value,
+                            isCorrect: opt.isCorrect,
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(options.id, opt.id as string))
+                )
+            )
+
+            // create new options
+            if (toCreate.length > 0) {
+                await tx.insert(options).values(
+                    toCreate.map(opt => ({
+                        questionId,
+                        value: opt.value!,
+                        isCorrect: opt.isCorrect!,
+                    }))
+                )
+            }
+        }
+
+        const updatedOptions = await tx.select().from(options).where(eq(options.questionId, questionId))
+        return { ...updated, options: updatedOptions };
+    });
+
+    return result;
+};
+
+// ── Delete Question (cascades options) ────────────────────────────────────────
+const deleteQuestion = async (questionId: string, teacherId: string) => {
+    await verifyQuestionOwnership(questionId, teacherId);
+    await db.delete(questions).where(eq(questions.id, questionId));
+    // options are cascade deleted automatically by PostgreSQL
+};
+
+export { createQuestion, getQuestionsBySection, getQuestionById, updateQuestion, deleteQuestion };
