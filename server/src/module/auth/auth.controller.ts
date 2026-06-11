@@ -27,8 +27,8 @@ export const logout = async (req: Request, res: Response) => {
 export const verifyEmail = async (req: Request, res: Response) => {
     await authService.verifyEmail(req.params.token as string);
     // User requested to redirect after verification
-    // return res.redirect(`${process.env.FRONTEND_URL}/login`);
-    return ApiResponse.ok(res, "Email verified successfully", null);
+    return res.redirect(`${process.env.FRONTEND_URL}/login`);
+    // return ApiResponse.ok(res, "Email verified successfully", null);
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
