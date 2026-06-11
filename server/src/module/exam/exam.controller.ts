@@ -26,3 +26,8 @@ export const deleteExam = async (req: Request, res: Response) => {
     await examService.deleteExam(req.params.id as string, req.user!.id);
     return ApiResponse.ok(res, "Exam deleted successfully", null);
 };
+
+export const getOverviewStats = async (req: Request, res: Response) => {
+    const stats = await examService.getOverviewStats(req.user!.id);
+    return ApiResponse.ok(res, "Overview stats fetched successfully", stats);
+};

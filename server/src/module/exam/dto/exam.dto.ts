@@ -6,7 +6,7 @@ export const createExamSchema = z.object({
     .max(100, { message: "Title cannot exceed 100 characters" }),
   duration: z.number({ message: "Duration is required" })
     .min(1, { message: "Duration must be at least 1 minute" })
-    .max(180, { message: "Duration cannot exceed 180 minutes" }),
+    .max(180, { message: "Duration cannot exceed 180 minutes" }).optional(),
   startTime: z.coerce.date({ message: "Start time is required" }),
   endTime: z.coerce.date({ message: "End time is required" }),
   totalMarks: z.number({ message: "Total marks is required" })

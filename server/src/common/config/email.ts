@@ -7,14 +7,14 @@ export const resend = new Resend(process.env.EMAIL_API_KEY);
 export const sendVerificationEmail = async (email: string, token: string) => {
   try {
     const url = `${process.env.CLIENT_URL}/api/auth/verifyEmail/${token}`;
-    
+
     const response = await resend.emails.send({
       from: 'alhnkar <noreply@karanop.in>',
       to: email,
       subject: 'Verify your email',
       html: `<h2>Welcome!</h2><p>Click <a href="${url}">here</a> to verify your email.</p>`,
     });
-    
+
     console.log("Verification email sent:", response);
     return response;
   } catch (error) {
@@ -38,7 +38,7 @@ export const sendResetPasswordEmail = async (email: string, token: string) => {
         <p>If you didn't request this, please ignore this email.</p>
       `,
     });
-    
+
     console.log("Reset password email sent:", response);
     return response;
   } catch (error) {

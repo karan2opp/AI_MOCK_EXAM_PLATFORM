@@ -1,0 +1,115 @@
+import api from "../../utils/axios";
+
+/**
+ * Fetch current user + compute isAdmin
+ */
+export const getMe = async (set: any) => {
+  try {
+    set({ loading: true, error: null });
+
+    const res = await api.get("/auth/me");
+    const userData = res.data?.data;
+
+    // ✅ Compute isAdmin from role
+    const isAdmin = userData?.role === "admin";
+
+    set({
+      user: userData,
+      isLoggedIn: true,
+      isAdmin,
+      loading: false,
+      error: null, // Clear any previous error
+    });
+
+    return userData;
+  } catch (error: any) {
+    set({
+      user: null,
+      isLoggedIn: false,
+      isAdmin: false,
+      loading: false,
+      error: error.response?.data?.message || "Failed to fetch user",
+    });
+    return null;
+  }
+};
+
+/**
+ * Refresh access token — preserve user data
+ */
+export const refreshToken = async (set: any) => {
+  try {
+    const res = await api.post("/auth/refreshToken");
+    const newToken = res.data?.data?.accessToken;
+
+    if (!newToken) throw new Error("No access token received");
+
+    // ✅ Only update token — keep user/isLoggedIn/isAdmin unchanged
+    set({ accessToken: newToken });
+    return true;
+  } catch (error: any) {
+    // ❌ Don't clear user on refresh failure — let getMe handle auth
+    set({
+      accessToken: null,
+      error: error.response?.data?.message || "Failed to refresh token",
+    });
+    return false;
+  }
+};
+
+export const logoutService = async (set: any) => {
+  try {
+    await api.post("/auth/logout", {}, { withCredentials: true }); // clears httpOnly cookie
+  } catch (err: any) {
+    if (err.response?.status !== 401) {
+      console.error("Logout failed:", err.message);
+    }
+    // still clear frontend state even if backend fails
+  } finally {
+    set({
+      user: null,
+      accessToken: null,
+      isLoggedIn: false,
+      isAdmin: false,
+      loading: false,
+      error: null,
+    });
+  }
+};
+
+export const forgotPasswordService = async (email: string) => {
+  try {
+    await api.post("/auth/forgotPassword", { email });
+    return { success: true };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to send reset email");
+  }
+};
+
+export const resetPasswordService = async (token: string, password: string) => {
+  try {
+    await api.put(`/auth/resetPassword/${token}`, { password });
+    return { success: true };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to reset password");
+  }
+};
+
+export const loginService = async (credentials: any) => {
+  try {
+    const res = await api.post("/auth/login", credentials);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to login");
+  }
+};
+
+export const registerService = async (userData: any) => {
+  try {
+    // Defaulting role to student as requested
+    const res = await api.post("/auth/register", { ...userData, role: "student" });
+    return res.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to register");
+  }
+};

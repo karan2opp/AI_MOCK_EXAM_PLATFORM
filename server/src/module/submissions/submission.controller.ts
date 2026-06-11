@@ -26,3 +26,18 @@ export const deleteSubmission = async (req: Request, res: Response) => {
     await submissionsService.deleteSubmission(req.params.id as string, req.user!.id);
     return ApiResponse.ok(res, "Submission deleted successfully", null);
 };
+
+export const getMySubmissions = async (req: Request, res: Response) => {
+    const submissions = await submissionsService.getMySubmissions(req.user!.id);
+    return ApiResponse.ok(res, "My submissions fetched successfully", submissions);
+};
+
+export const getExamForSubmission = async (req: Request, res: Response) => {
+    const examData = await submissionsService.getExamForSubmission(req.params.id as string, req.user!.id);
+    return ApiResponse.ok(res, "Exam data fetched successfully", examData);
+};
+
+export const verifyJoinCode = async (req: Request, res: Response) => {
+    const exam = await submissionsService.verifyJoinCode(req.params.joinCode as string, req.user!.id);
+    return ApiResponse.ok(res, "Join code verified successfully", exam);
+};
