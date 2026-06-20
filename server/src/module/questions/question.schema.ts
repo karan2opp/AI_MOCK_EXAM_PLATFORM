@@ -11,6 +11,7 @@ export const questions = pgTable("questions", {
   description: text("description").notNull(),
   images: jsonb("images").$type<{ url: string; publicId: string }[]>(),
   marks: doublePrecision("marks").notNull(),
+  modelAnswer: text("model_answer"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

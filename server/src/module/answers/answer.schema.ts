@@ -11,6 +11,7 @@ export const answers = pgTable("answers", {
   textAnswer: text("text_answer"),
   isCorrect: boolean("is_correct"),
   marksAwarded: doublePrecision("marks_awarded"),
+  feedback: text("feedback"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -118,25 +118,6 @@ export default function ExamAttemptPage() {
     return result;
   }, [examData]);
 
-  // Timer Effect
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleTimeUp();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft]);
-
   const handleTimeUp = async () => {
     toast.error("Time is up! Submitting your assessment automatically.");
     await submitExamFinal();
@@ -193,9 +174,6 @@ export default function ExamAttemptPage() {
       // Update saved answers state
       setSavedAnswers(prev => ({ ...prev, [currentQ.id]: selectedOptions }));
       
-      // Optionally show a subtle toast
-      // toast.success("Answer saved");
-      
       if (currentIndex < flattenedQuestions.length - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
@@ -211,10 +189,6 @@ export default function ExamAttemptPage() {
   const submitExamFinal = async () => {
     setIsSubmitting(true);
     try {
-      // 1. Submit any pending answers that haven't been saved yet?
-      // Wait, the user asked for manual "Save and Next". We'll just submit the exam, 
-      // relying on the answers they explicitly saved. If they want to save the current one, 
-      // they should click "Save & Next" first. But let's be nice and save the current one if selected.
       const currentQ = flattenedQuestions[currentIndex];
       if (currentQ) {
         const selectedOptions = answers[currentQ.id];
@@ -231,7 +205,6 @@ export default function ExamAttemptPage() {
         }
       }
 
-      // 2. Submit the exam
       await submitExamService(submissionId);
       toast.success("Assessment submitted successfully!");
       router.push(`/student/results/${submissionId}`);
@@ -256,6 +229,33 @@ export default function ExamAttemptPage() {
     return `${pad(m)}:${pad(s)}`;
   };
 
+  const ExamTimer = ({ endTime, onTimeUp }: { endTime: number, onTimeUp: () => void }) => {
+    const [timeLeft, setTimeLeft] = useState(() => Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
+
+    useEffect(() => {
+      if (timeLeft <= 0) return;
+
+      const timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            onTimeUp();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }, [timeLeft, onTimeUp]);
+
+    return (
+      <div className={`font-mono text-2xl font-bold tracking-wider ${timeLeft < 300 ? 'text-red-400' : 'text-gray-200'}`}>
+        {formatTime(timeLeft)}
+      </div>
+    );
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full bg-[#0b0f19] text-white">Loading Assessment...</div>;
   if (!examData) return <div className="flex items-center justify-center h-full bg-[#0b0f19] text-white">Assessment not found.</div>;
   if (flattenedQuestions.length === 0) return <div className="flex items-center justify-center h-full bg-[#0b0f19] text-white">No questions in this assessment.</div>;
@@ -274,9 +274,14 @@ export default function ExamAttemptPage() {
         {/* Timer in Center */}
         <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
           <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase mb-1">Time Remaining</span>
-          <div className={`font-mono text-2xl font-bold tracking-wider ${timeLeft !== null && timeLeft < 300 ? 'text-red-400' : 'text-gray-200'}`}>
-            {timeLeft !== null ? formatTime(timeLeft) : "--:--"}
-          </div>
+          {submissionData?.createdAt && examData?.duration ? (
+            <ExamTimer 
+              endTime={new Date(submissionData.createdAt).getTime() + examData.duration * 60 * 1000} 
+              onTimeUp={handleTimeUp} 
+            />
+          ) : (
+            <div className="font-mono text-2xl font-bold tracking-wider text-gray-200">--:--</div>
+          )}
         </div>
 
         <Button 

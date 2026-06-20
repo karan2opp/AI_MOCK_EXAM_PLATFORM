@@ -2,8 +2,9 @@ import { eq, and, inArray } from "drizzle-orm";
 import db from "../../common/db/index.js";
 import { questions, options, sections, exams } from "../../common/db/schema.js";
 import { ApiError } from "../../common/utils/ApiError.js";
-import type { CreateQuestionDto, UpdateQuestionDto } from "./dto/question.dto.js";
+import type { CreateQuestionDto, UpdateQuestionDto, GenerateQuestionConfig } from "./dto/question.dto.js";
 import { uploadToCloudinary } from "../../common/config/cloudinary.js";
+import { checkOpenAI } from "../../common/agent/openai.client.js";
 // ── Helper: verify section belongs to teacher ──────────────────────────────────
 const verifySectionOwnership = async (sectionId: string, teacherId: string) => {
     const [section] = await db.select({
@@ -186,4 +187,82 @@ const deleteQuestion = async (questionId: string, teacherId: string) => {
     // options are cascade deleted automatically by PostgreSQL
 };
 
-export { createQuestion, getQuestionsBySection, getQuestionById, updateQuestion, deleteQuestion };
+const buildUserPrompt = (config: GenerateQuestionConfig): string => {
+    let prompt = `Subject: ${config.subject}\nDifficulty: ${config.difficulty}\n\n`
+    prompt += `Generate questions for the following topics and subtopics:\n\n`
+
+    config.topics.forEach((topic) => {
+        prompt += `Topic: ${topic.name}\n`
+        topic.subtopics.forEach((sub) => {
+            prompt += `  - Subtopic: ${sub.name} | Count: ${sub.count} | Types: ${sub.questionTypes.join(", ")}\n`
+        })
+        prompt += `\n`
+    })
+
+    prompt += `MARKS CONFIGURATION:\n`
+    prompt += `- MCQ questions: 1 mark\n`
+    prompt += `- Text-based (descriptive) questions: ${config.textMarks || 5} marks\n\n`
+
+    if (config.customInstructions) {
+        prompt += `Additional Instructions: ${config.customInstructions}\n`
+    }
+
+    return prompt
+}
+const generateQuestion = async (info: GenerateQuestionConfig) => {
+    const client = await checkOpenAI();
+    const SYSTEM_PROMPT = `You are an expert exam question generator for our computer training institute.
+
+INSTITUTE EXAM PATTERN:
+- Question ratio: 60% theory-based, 40% practical/application-based
+- Maintain this ratio strictly across generated questions
+
+SUBJECT CATEGORIES (only generate questions from these):
+1. Programming (e.g. C, C++, Python, Java basics — logic, syntax, concepts)
+2. Tally (accounting software — vouchers, ledgers, GST, inventory)
+3. MS Office Basic:
+   - MS Word (formatting, mail merge, templates)
+   - MS Excel (formulas, functions, charts, pivot tables)
+   - MS PowerPoint (slides, animations, design, presentation tools)
+
+QUESTION RULES:
+- Theory questions → test conceptual understanding, definitions, "what is", "why", "differentiate between"
+- Practical questions → test "how to perform X", step-based, output-based, formula-based (especially for Excel/Tally)
+- Difficulty must match requested level (beginner/intermediate/advanced)
+- Each MCQ must have exactly 4 options with only 1 correct answer
+- Assign "marks" to each question based on the MARKS CONFIGURATION provided by the user
+- Include a short explanation for the correct answer
+
+OUTPUT FORMAT:
+Respond ONLY in valid JSON:
+{
+  "questions": [
+    {
+      "question": "string",
+      "type": "theory" | "practical",
+      "subject": "programming" | "tally" | "ms_word" | "ms_excel" | "ms_powerpoint",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": "string",
+      "explanation": "string",
+      "marks": number
+    }
+  ]
+}`
+    const prompt = buildUserPrompt(info)
+    try {
+        const response = await client.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "user", content: prompt },
+            ],
+        });
+
+        return response.choices[0]?.message?.content;
+    } catch (error) {
+        throw new ApiError(500, "Failed to generate question");
+    }
+
+
+}
+export { createQuestion, getQuestionsBySection, getQuestionById, updateQuestion, deleteQuestion, generateQuestion };

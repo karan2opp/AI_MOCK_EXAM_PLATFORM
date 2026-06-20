@@ -56,25 +56,11 @@ export default function WaitingRoomPage() {
     fetchVerification();
   }, [joinCode, router]);
 
-  // Countdown timer effect
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0 || canJoinNow) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timer);
-          setCanJoinNow(true);
-          handleAutoJoin();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft, canJoinNow]);
+  // The countdown interval is now managed by the CountdownTimer component.
+  const onCountdownReady = () => {
+    setCanJoinNow(true);
+    handleAutoJoin();
+  };
 
   const handleAutoJoin = async () => {
     if (isJoining) return;
@@ -110,6 +96,27 @@ export default function WaitingRoomPage() {
     return `${minutes}m ${secs}s`;
   };
 
+  const CountdownTimer = ({ initialSeconds, onReady }: { initialSeconds: number, onReady: () => void }) => {
+    const [seconds, setSeconds] = useState(initialSeconds);
+
+    useEffect(() => {
+      if (seconds <= 0) return;
+      const timer = setInterval(() => {
+        setSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            onReady();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }, [seconds, onReady]);
+
+    return <>{formatTime(seconds)}</>;
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col h-full items-center justify-center p-10 bg-[#0b0f19]">
@@ -142,7 +149,7 @@ export default function WaitingRoomPage() {
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="pt-6 relative z-10">
+        <CardContent className="pt-6 relative z-10 overflow-y-auto max-h-[60vh] custom-scrollbar">
           {canJoinNow ? (
             <div className="text-center space-y-6">
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6 text-emerald-400">
@@ -171,7 +178,7 @@ export default function WaitingRoomPage() {
               <div className="text-center space-y-3">
                 <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">Starts In</p>
                 <div className="font-mono text-4xl md:text-5xl font-bold text-white tracking-tight drop-shadow-md">
-                  {timeLeft !== null ? formatTime(timeLeft) : "--"}
+                  {timeLeft !== null ? <CountdownTimer initialSeconds={timeLeft} onReady={onCountdownReady} /> : "--"}
                 </div>
               </div>
 

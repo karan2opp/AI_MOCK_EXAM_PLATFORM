@@ -2,7 +2,7 @@ import { eq, and, isNull, desc } from "drizzle-orm";
 import db from "../../common/db/index.js";
 import { submissions, exams, answers, options, questions, sections, users } from "../../common/db/schema.js";
 import { ApiError } from "../../common/utils/ApiError.js";
-
+import { evaluateTextAnswersBatched, type TextAnswer, type EvaluationMode } from "../evalutaion/evalutaion.js";
 // ── Join Exam ──────────────────────────────────────────────────────────────────
 const joinExam = async (joinCode: string, studentId: string) => {
     // find exam by join code
@@ -43,7 +43,7 @@ const joinExam = async (joinCode: string, studentId: string) => {
 };
 
 // ── Submit Exam ────────────────────────────────────────────────────────────────
-const submitExam = async (submissionId: string, studentId: string) => {
+const submitExam = async (submissionId: string, studentId: string, mode: string) => {
     // verify submission exists and belongs to student
     const [submission] = await db.select().from(submissions).where(
         and(
@@ -60,46 +60,67 @@ const submitExam = async (submissionId: string, studentId: string) => {
         eq(answers.submissionId, submissionId)
     );
 
-    // calculate MCQ score
-    let score = 0;
+    let totalScore = 0;
+    const textAnswersToEvaluate: TextAnswer[] = [];
 
+    // --- MCQ evaluation (sync, no AI) ---
     for (const answer of submissionAnswers) {
-        // get question to check type and marks
         const [question] = await db.select().from(questions).where(eq(questions.id, answer.questionId));
-        if (!question || question.type !== "mcq") continue;
+        if (!question) continue;
 
-        // get correct options for this question
-        const correctOptions = await db.select().from(options).where(
-            and(eq(options.questionId, answer.questionId), eq(options.isCorrect, true))
-        );
+        if (question.type === "mcq") {
+            const correctOptions = await db.select().from(options).where(
+                and(eq(options.questionId, answer.questionId), eq(options.isCorrect, true))
+            );
 
-        const correctOptionIds = correctOptions.map(opt => opt.id);
-        const selectedOptionIds = answer.options ?? [];
+            const correctOptionIds = correctOptions.map(opt => opt.id);
+            const selectedOptionIds = answer.options ?? [];
 
-        // check if selected options match correct options exactly
-        const isCorrect =
-            correctOptionIds.length === selectedOptionIds.length &&
-            correctOptionIds.every(id => selectedOptionIds.includes(id));
+            const isCorrect =
+                correctOptionIds.length === selectedOptionIds.length &&
+                correctOptionIds.every(id => selectedOptionIds.includes(id));
 
-        if (isCorrect) {
-            score += question.marks;
+            const marksAwarded = isCorrect ? question.marks : 0;
+            totalScore += marksAwarded;
 
-            // update answer isCorrect and marksAwarded
             await db.update(answers)
-                .set({ isCorrect: true, marksAwarded: question.marks })
+                .set({ isCorrect, marksAwarded })
                 .where(eq(answers.id, answer.id));
-        } else {
-            await db.update(answers)
-                .set({ isCorrect: false, marksAwarded: 0 })
-                .where(eq(answers.id, answer.id));
+
+        } else if (question.type === "descriptive") {
+            textAnswersToEvaluate.push({
+                answerId: answer.id,
+                questionId: question.id,
+                question: question.description,
+                modelAnswer: question.modelAnswer || "",
+                studentAnswer: answer.textAnswer ?? "",
+                maxMarks: question.marks
+            });
         }
     }
 
-    // update submission status and score
+    // --- Text/Code evaluation (AI, batched) ---
+    if (textAnswersToEvaluate.length > 0) {
+        const textResults = await evaluateTextAnswersBatched(textAnswersToEvaluate, mode as EvaluationMode);
+
+        for (const result of textResults) {
+            totalScore += result.score;
+
+            await db.update(answers)
+                .set({
+                    isCorrect: result.score === result.maxScore,
+                    marksAwarded: result.score,
+                    feedback: result.feedback ?? null
+                })
+                .where(eq(answers.id, result.answerId));
+        }
+    }
+
+    // --- Update submission ---
     const [updated] = await db.update(submissions)
         .set({
             status: "submitted",
-            score,
+            score: totalScore,
             submittedAt: new Date(),
             updatedAt: new Date(),
         })
@@ -110,7 +131,7 @@ const submitExam = async (submissionId: string, studentId: string) => {
 };
 
 // ── Get Submission by ID (student sees own) ────────────────────────────────────
-const getSubmissionById = async (submissionId: string, studentId: string) => {
+const getSubmissionById = async (submissionId: string, studentId: string, mode: string = "detailed") => {
     let [submission] = await db.select().from(submissions).where(
         and(
             eq(submissions.id, submissionId),
@@ -126,7 +147,7 @@ const getSubmissionById = async (submissionId: string, studentId: string) => {
             const endTime = new Date(submission.createdAt.getTime() + exam.duration * 60000);
             if (new Date() >= endTime) {
                 try {
-                    const updated = await submitExam(submissionId, studentId);
+                    const updated = await submitExam(submissionId, studentId, mode);
                     if (updated) submission = updated;
                 } catch (e) {
                     console.error("Auto-submit failed", e);
@@ -144,7 +165,7 @@ const getSubmissionById = async (submissionId: string, studentId: string) => {
 };
 
 // ── Get All Submissions for an Exam (teacher only) ─────────────────────────────
-const getSubmissionsByExam = async (examId: string, teacherId: string) => {
+const getSubmissionsByExam = async (examId: string, teacherId: string, mode: string = "simple") => {
     // verify exam belongs to teacher
     const [exam] = await db.select().from(exams).where(
         and(eq(exams.id, examId), eq(exams.createdBy, teacherId))
@@ -159,10 +180,10 @@ const getSubmissionsByExam = async (examId: string, teacherId: string) => {
             email: users.email
         }
     }).from(submissions)
-    .innerJoin(users, eq(submissions.userId, users.id))
-    .where(
-        and(eq(submissions.examId, examId), isNull(submissions.deletedAt))
-    );
+        .innerJoin(users, eq(submissions.userId, users.id))
+        .where(
+            and(eq(submissions.examId, examId), isNull(submissions.deletedAt))
+        );
 
     const now = new Date();
     for (const row of result) {
@@ -171,7 +192,7 @@ const getSubmissionsByExam = async (examId: string, teacherId: string) => {
             const endTime = new Date(sub.createdAt.getTime() + exam.duration * 60000);
             if (now >= endTime) {
                 try {
-                    const updated = await submitExam(sub.id, sub.userId);
+                    const updated = await submitExam(sub.id, sub.userId, mode);
                     if (updated) row.submission = updated;
                 } catch (e) {
                     console.error("Auto-submit failed", e);
@@ -200,28 +221,28 @@ const deleteSubmission = async (submissionId: string, studentId: string) => {
 };
 
 // ── Get My Submissions ─────────────────────────────────────────────────────────
-const getMySubmissions = async (studentId: string) => {
+const getMySubmissions = async (studentId: string, mode: string = "simple") => {
     const result = await db.select({
         submission: submissions,
         exam: exams
     })
-    .from(submissions)
-    .innerJoin(exams, eq(submissions.examId, exams.id))
-    .where(
-        and(
-            eq(submissions.userId, studentId),
-            isNull(submissions.deletedAt)
+        .from(submissions)
+        .innerJoin(exams, eq(submissions.examId, exams.id))
+        .where(
+            and(
+                eq(submissions.userId, studentId),
+                isNull(submissions.deletedAt)
+            )
         )
-    )
-    .orderBy(desc(submissions.createdAt));
-    
+        .orderBy(desc(submissions.createdAt));
+
     const now = new Date();
     for (const row of result) {
         if (row.submission.status === "inprogress" && row.exam.duration) {
             const endTime = new Date(row.submission.createdAt.getTime() + row.exam.duration * 60000);
             if (now >= endTime) {
                 try {
-                    const updated = await submitExam(row.submission.id, studentId);
+                    const updated = await submitExam(row.submission.id, studentId, mode);
                     if (updated) row.submission = updated;
                 } catch (e) {
                     console.error("Auto-submit failed for", row.submission.id, e);
@@ -251,14 +272,14 @@ const getExamForSubmission = async (submissionId: string, studentId: string) => 
 
     const sectionsWithQuestions = await Promise.all(examSections.map(async (section) => {
         const sectionQuestions = await db.select().from(questions).where(eq(questions.sectionId, section.id));
-        
+
         const questionsWithOptions = await Promise.all(sectionQuestions.map(async (question) => {
             const questionOptions = await db.select({
                 id: options.id,
                 questionId: options.questionId,
                 value: options.value
             }).from(options).where(eq(options.questionId, question.id));
-            
+
             return { ...question, options: questionOptions };
         }));
 

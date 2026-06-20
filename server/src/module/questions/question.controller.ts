@@ -27,3 +27,9 @@ export const deleteQuestion = async (req: Request, res: Response) => {
     await questionsService.deleteQuestion(req.params.id as string, req.user!.id);
     return ApiResponse.ok(res, "Question deleted successfully", null);
 };
+
+export const generateQuestion = async (req: Request, res: Response) => {
+    // Config validation is handled in the route middleware
+    const question = await questionsService.generateQuestion(req.body);
+    return ApiResponse.ok(res, "Question generated successfully", question);
+};
