@@ -46,7 +46,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-white/5 font-extrabold text-2xl text-black">
               A
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Abiyaas</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Abhyas</h1>
             <p className="text-sm text-gray-400 mt-1">Institutional Assessment Platform</p>
           </div>
 
@@ -60,7 +60,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           transition={{ delay: 0.5 }}
           className="text-center text-xs text-gray-600 mt-6"
         >
-          &copy; {new Date().getFullYear()} Abiyaas. All rights reserved.
+          &copy; {new Date().getFullYear()} Abhyas. All rights reserved.
         </motion.p>
       </div>
     </div>

@@ -42,7 +42,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             <div className="bg-purple-600 p-1.5 rounded-md shadow-lg shadow-purple-900/50">
               <ShieldAlert className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-white tracking-tight">Abiyaas Super Admin</span>
+            <span className="font-bold text-lg text-white tracking-tight">Abhyas Super Admin</span>
           </div>
           <button onClick={() => setIsMobileOpen(true)} className="p-2 -mr-2 text-gray-400 hover:text-white">
             <Menu className="h-6 w-6" />
@@ -88,7 +88,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             {!isCollapsed && (
               <div className="overflow-hidden whitespace-nowrap">
                 <h1 className="font-bold text-lg leading-tight tracking-tight text-white">Super Admin</h1>
-                <p className="text-[11px] text-gray-400 font-medium tracking-wide uppercase">Abiyaas</p>
+                <p className="text-[11px] text-gray-400 font-medium tracking-wide uppercase">Abhyas</p>
               </div>
             )}
           </div>

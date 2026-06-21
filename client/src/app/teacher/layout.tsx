@@ -44,7 +44,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
             <div className="bg-indigo-600 p-1.5 rounded-md shadow-lg shadow-indigo-900/50">
               <BookOpen className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-white tracking-tight">Abiyaas</span>
+            <span className="font-bold text-lg text-white tracking-tight">Abhyas</span>
           </div>
           <button onClick={() => setIsMobileOpen(true)} className="p-2 -mr-2 text-gray-400 hover:text-white">
             <Menu className="h-6 w-6" />
@@ -90,7 +90,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
             </div>
             {!isCollapsed && (
               <div className="overflow-hidden whitespace-nowrap">
-                <h1 className="font-bold text-lg leading-tight tracking-tight text-white">Abiyaas</h1>
+                <h1 className="font-bold text-lg leading-tight tracking-tight text-white">Abhyas</h1>
                 <p className="text-[11px] text-gray-400 font-medium tracking-wide uppercase">Teacher Portal</p>
               </div>
             )}

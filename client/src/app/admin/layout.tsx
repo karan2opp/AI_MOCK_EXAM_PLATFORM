@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="bg-blue-600 p-1.5 rounded-md shadow-lg shadow-blue-900/50">
               <ShieldCheck className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-white tracking-tight">Abiyaas Admin</span>
+            <span className="font-bold text-lg text-white tracking-tight">Abhyas Admin</span>
           </div>
           <button onClick={() => setIsMobileOpen(true)} className="p-2 -mr-2 text-gray-400 hover:text-white">
             <Menu className="h-6 w-6" />
@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {!isCollapsed && (
               <div className="overflow-hidden whitespace-nowrap">
                 <h1 className="font-bold text-lg leading-tight tracking-tight text-white">Admin Portal</h1>
-                <p className="text-[11px] text-gray-400 font-medium tracking-wide uppercase">Abiyaas</p>
+                <p className="text-[11px] text-gray-400 font-medium tracking-wide uppercase">Abhyas</p>
               </div>
             )}
           </div>
