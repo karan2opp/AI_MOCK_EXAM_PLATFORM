@@ -19,7 +19,7 @@ interface AuthState {
   error: string | null;
   isInitialized: boolean;
 
-  setUser: (userData: User, token: string) => void;
+  setUser: (userData: User, token: string | null) => void;
   setAccessToken: (token: string) => void;
   setInitialized: (value: boolean) => void;
   fetchCurrentUser: () => Promise<any>;
