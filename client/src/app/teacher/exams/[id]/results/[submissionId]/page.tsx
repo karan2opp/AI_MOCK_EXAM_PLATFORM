@@ -390,7 +390,7 @@ export default function ResultsPage() {
           </div>
 
           {/* Right Column - Navigation Sidebar (Desktop) */}
-          {renderNavigationSidebar("hidden md:flex md:col-span-1 flex-col gap-4")}
+          {renderNavigationSidebar("hidden md:flex md:col-span-1 flex-col gap-4 md:min-h-0")}
         </div>
       </div>
     </div>

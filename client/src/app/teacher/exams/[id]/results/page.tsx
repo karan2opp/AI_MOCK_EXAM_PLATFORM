@@ -51,7 +51,7 @@ export default function ExamResultsPage() {
     : 0;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-10">
+    <div className="flex-1 overflow-y-auto custom-scrollbar p-10">
       <header className="flex items-center justify-between mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">

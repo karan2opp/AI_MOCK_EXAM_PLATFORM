@@ -196,13 +196,12 @@ export default function ChatSessionPage() {
         const endIdx = jsonStr.lastIndexOf("}");
         if (startIdx !== -1 && endIdx !== -1) {
           jsonStr = jsonStr.substring(startIdx, endIdx + 1);
-          // Fix common Mistral/LLM JSON syntax errors (missing commas between objects, trailing commas)
           jsonStr = jsonStr.replace(/\}\s*\{/g, '},{');
           jsonStr = jsonStr.replace(/\]\s*\[/g, '],[');
           jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
           
           let parsed = JSON.parse(jsonStr);
-          if (parsed.exam) parsed = parsed.exam; // Normalize if wrapped in 'exam'
+          if (parsed.exam) parsed = parsed.exam;
           return parsed;
         }
       }
@@ -211,6 +210,7 @@ export default function ChatSessionPage() {
     }
     return null;
   };
+
 
   const handleSaveExam = async (examData: any) => {
     setIsSavingExam(true);
@@ -317,6 +317,7 @@ export default function ChatSessionPage() {
       const res = await api.post(`/chat/${chatId}/message`, { message: userMsg });
       const aiReply = res.data.data.reply;
       setMessages(prev => [...prev, { role: "assistant", content: aiReply }]);
+      window.dispatchEvent(new Event("refresh-chats"));
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to send message");
     } finally {
@@ -361,7 +362,8 @@ export default function ChatSessionPage() {
             const parsed = extractJson(msg.content);
             if (parsed) {
               examData = parsed;
-              // Save to local storage asynchronously to avoid render blocking
+
+              
               setTimeout(() => {
                 try {
                   localStorage.setItem(`chat_${chatId}_exam_draft`, JSON.stringify({
@@ -371,7 +373,6 @@ export default function ChatSessionPage() {
                 } catch(e){}
               }, 0);
             }
-            // Remove the block from what is displayed to the user
             displayText = displayText.replace(/\[EXAM_DATA\][\s\S]*?\[\/EXAM_DATA\]/, "").trim();
           }
 
@@ -379,7 +380,7 @@ export default function ChatSessionPage() {
             const parts = msg.content.split("EXAM_CONFIRMED");
             displayText = parts[0].trim();
           } else if (msg.role === "assistant" && msg.content.includes("[GENERATE_MODE]")) {
-            displayText = msg.content.replace("[GENERATE_MODE]", "").trim();
+            displayText = displayText.replace(/\[GENERATE_MODE\][\s\S]*?\[\/GENERATE_MODE\]/, "").trim();
           }
 
           if (msg.role === "system" && msg.content.startsWith("EXAM_SAVED_SUCCESSFULLY:")) {
@@ -480,7 +481,7 @@ export default function ChatSessionPage() {
                             className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold h-12 rounded-xl shadow-lg shadow-purple-900/30 transition-all hover:scale-[1.01]"
                           >
                             {isSavingExam ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
-                            {isSavingExam ? "Preparing Builder..." : "Save Exam & Open Builder"}
+                            {isSavingExam ? "Preparing Builder..." : (isExamSaved ? "Open Exam Builder" : "Save Exam & Open Builder")}
                           </Button>
                         </div>
                         

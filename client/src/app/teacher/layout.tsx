@@ -44,6 +44,10 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         }
       };
       fetchChats();
+
+      const handleRefresh = () => fetchChats();
+      window.addEventListener("refresh-chats", handleRefresh);
+      return () => window.removeEventListener("refresh-chats", handleRefresh);
     }
   }, [pathname]);
 
